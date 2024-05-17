@@ -75,12 +75,13 @@ class Correctionstack:
 
 #%%        
 mag=Magnetarray(0,[m1,0,0],distance=.08)
-cor_r = Correctionstack(20,[-m1,0,0],[0,.03,0],.013)
-cor_l = Correctionstack(20,[m1,0,0],(0,-.03,0),.013)
-
+cor_r = Correctionstack(10,[-m1,0,0],[0,.03,0],.013)
+cor_l = Correctionstack(10,[m1,0,0],(0,-.03,0),.013)
 
 def B_total(r):
     return mag.B(r)+cor_r.B(r)+cor_l.B(r)
+
+
 
 B = np.zeros((ndens,ndens,ndens,3))
 for i,x in enumerate(nx):
@@ -126,7 +127,7 @@ def get_offset():
     return min(1,abs(np.random.normal(0,.3))),np.random.rand()*2*np.pi
 
 offset = get_offset()
-el = electron((0,.0,0),74.57,(.3,-np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
+el = electron((0,.0,0),500,(.3,-np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
 print(offset)
 
 
