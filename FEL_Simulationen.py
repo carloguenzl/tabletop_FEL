@@ -44,7 +44,7 @@ class Magnetpair:
         return magnet1.B(r)+magnet2.B(r)
 
 class Magnetarray:
-    def __init__(self,num_of_pairs,m,distance=.2):
+    def __init__(self,num_of_pairs,m,distance=.013):
         self.distance = distance
         self.num_of_pairs = int(num_of_pairs)
         self.m = m
@@ -74,9 +74,9 @@ class Correctionstack:
 
 
 #%%        
-mag=Magnetarray(0,[m1,0,0],distance=.08)
-cor_r = Correctionstack(10,[-m1,0,0],[0,.03,0],.013)
-cor_l = Correctionstack(10,[m1,0,0],(0,-.03,0),.013)
+mag=Magnetarray(10,[m1,0,0],distance=.08)
+cor_r = Correctionstack(0,[-m1,0,0],[0,.03,0],.013)
+cor_l = Correctionstack(0,[m1,0,0],(0,-.03,0),.013)
 
 def B_total(r):
     return mag.B(r)+cor_r.B(r)+cor_l.B(r)
@@ -127,7 +127,7 @@ def get_offset():
     return min(1,abs(np.random.normal(0,.3))),np.random.rand()*2*np.pi
 
 offset = get_offset()
-el = electron((0,.0,0),500,(.3,-np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
+el = electron((0,.0,0),3,(0,-np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
 print(offset)
 
 
@@ -265,7 +265,7 @@ def E_rad(r,t,ret,axis=1):
     if index < 0:
         return np.zeros(3)
         
-    acc = acc_memory[axis,index]
+    acc = acc_memory.T[axis,index]
     acc = acc-np.dot(acc,R[index]/np.linalg.norm(R[index]))
     
     return const.e/(4*np.pi*const.epsilon_0*const.c**2)*1/np.linalg.norm(R[index])*acc
@@ -276,7 +276,8 @@ for t,ret in zip(timescale,retardierung):
     Ess.append(E_rad(detector_position,t,ret))
 Ess = np.array(Ess)
 #%%
-plt.plot(timescale,Ess.T[0])
+plt.plot(timescale[3000:],Ess.T[2][3000:])
+plt.grid()
 
 #%% MONTE CARLO
 def run_electron(electron,steps=3.5E3):
