@@ -6,7 +6,7 @@ Created on Wed Apr  3 16:39:44 2024
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.fft import fft, ifft
+from scipy.fft import fft, ifft, fftfreq
 import scipy.constants as const
 #%%
 def get_dipole(B_rem,l,d):
@@ -29,9 +29,9 @@ class Magnet:
     
     def B(self,r):
         r = np.array(r)
-        r = np.array(r-self.place)       
+        r = np.array(r-self.place)  
         return const.mu_0/(4*np.pi) * ((3*np.dot(self.m,r)*r-self.m*np.linalg.norm(r)**2))/(np.linalg.norm(r)**5)
-
+    
 class Magnetpair:
     def __init__(self,place,m,distance=.04):
         self.distance = distance
@@ -74,9 +74,9 @@ class Correctionstack:
 
 
 #%%        
-mag=Magnetarray(10,[m1,0,0],distance=.08)
-cor_r = Correctionstack(0,[-m1,0,0],[0,.03,0],.013)
-cor_l = Correctionstack(0,[m1,0,0],(0,-.03,0),.013)
+mag=Magnetarray(0,[m1,0,0],distance=.08)
+cor_r = Correctionstack(20,[-m1,0,0],[0,.03,0],.013)
+cor_l = Correctionstack(20,[m1,0,0],(0,-.03,0),.013)
 
 def B_total(r):
     return mag.B(r)+cor_r.B(r)+cor_l.B(r)
@@ -99,6 +99,11 @@ detector_position = (0,0,1)
 class electron:
     def __init__(self,place,energy,offset=(0,0)): #energy in keV
         self.place=np.array(place)
+        
+        #same thing...
+        #E = energy*1E3*const.e
+        #self.vel_abs1 = np.sqrt((E*(2*const.m_e*const.c**4+E*const.c**2))/(const.m_e**2*const.c**4 + 2*E*const.m_e*const.c**2+E**2))
+        
         self.vel_abs = np.sqrt(1-((const.m_e*const.c**2/const.e)/(energy*10**3+const.m_e*const.c**2/const.e))**2)*const.c
         self.vel = np.array([self.vel_abs*offset[0]*np.cos(offset[1]),self.vel_abs*offset[0]*np.sin(offset[1]),np.sqrt(1-offset[0]**2)*self.vel_abs])
         
@@ -127,7 +132,7 @@ def get_offset():
     return min(1,abs(np.random.normal(0,.3))),np.random.rand()*2*np.pi
 
 offset = get_offset()
-el = electron((0,.0,0),3,(0,-np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
+el = electron((0,.0,0),70,(.3,+np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
 print(offset)
 
 
@@ -243,13 +248,14 @@ for t,place,vel,acc,ret,r in zip(timescale,memory,vel_memory,acc_memory,retardie
 E_rad = np.array(E_rad).T
 B_rad = np.array(B_rad).T
 phis = np.array(phis).T
-#fourier = fft(E_rad[2][4000:])
-
+fourier = np.abs(fft(E_rad[2][2287:]))
+freqs = fftfreq(len(fourier),timescale[-1]/len(timescale))
 #%%
 #plt.plot(timescale,np.linalg.norm(E_rad,axis=0))
-#plt.plot(fourier)
-#plt.plot(timescale[:],E_rad[2][:])
+
+#plt.plot(timescale[2287:],E_rad[2][2287:])
 plt.plot(timescale[:],phis)
+#plt.plot(freqs[:10],fourier[:10])
 #%% Retry field. again.
 R = []
 for place in memory:
@@ -260,23 +266,29 @@ acc_memory = np.array(acc_memory)
 
 
 
-def E_rad(r,t,ret,axis=1):
+def E_rad(r,t,ret):
     index = int(np.round((t - ret)/el.Dt))
     if index < 0:
         return np.zeros(3)
         
-    acc = acc_memory.T[axis,index]
-    acc = acc-np.dot(acc,R[index]/np.linalg.norm(R[index]))
+    acc = acc_memory[index]
+    R_unit = R[index]/np.linalg.norm(R[index])
+    acc_perp = acc-np.dot(acc,R_unit)
     
-    return const.e/(4*np.pi*const.epsilon_0*const.c**2)*1/np.linalg.norm(R[index])*acc
+    return const.e/(4*np.pi*const.epsilon_0*const.c**2)*1/np.linalg.norm(R[index])*acc_perp
 acc_memory = acc_memory
 
 Ess = []
 for t,ret in zip(timescale,retardierung):
     Ess.append(E_rad(detector_position,t,ret))
 Ess = np.array(Ess)
+
+fourier = np.abs(fft(Ess.T[0][2287:]))
+freqs = fftfreq(len(fourier),timescale[-1]/len(timescale))
+
 #%%
 plt.plot(timescale[3000:],Ess.T[2][3000:])
+#plt.plot(freqs[:10],fourier[:10])
 plt.grid()
 
 #%% MONTE CARLO
@@ -345,7 +357,7 @@ for angle in np.linspace(0,90,100):
     
     lengths=(np.sqrt(Bx**2+By**2+Bz**2))
     lengths_normalized = (lengths-(abs(lengths).min())) / abs(lengths.max())
-    colors = (plt.cm.jet(lengths_normalized))
+    colors = (plt.cm.jet(lengths))
     colors = colors.reshape(-1, 4)
     
     ax.quiver(x,y,z,Bx,By,Bz,color=colors,length=0.05,normalize=True,linewidths=.5)
