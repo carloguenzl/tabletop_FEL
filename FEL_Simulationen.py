@@ -15,13 +15,15 @@ def get_dipole(B_rem,l,d):
 m1 = get_dipole(1.3, 20E-3, 10E-3)
 
 #%%
-zl,zr=-.2,.5
-yl,yr=-.2,.2
-xl,xr=-.2,.2
-ndens=10
-
-nx,ny,nz = np.linspace(xl, xr,ndens),np.linspace(yl,yr,ndens),np.linspace(zl,zr,ndens)
-
+# =============================================================================
+# zl,zr=-.2,.5
+# yl,yr=-.2,.2
+# xl,xr=-.2,.2
+# ndens=10
+# 
+# nx,ny,nz = np.linspace(xl, xr,ndens),np.linspace(yl,yr,ndens),np.linspace(zl,zr,ndens)
+# 
+# =============================================================================
 class Magnet:
     def __init__(self,place,m):
         self.place = np.array(place)
@@ -33,7 +35,7 @@ class Magnet:
         return const.mu_0/(4*np.pi) * ((3*np.dot(self.m,r)*r-self.m*np.linalg.norm(r)**2))/(np.linalg.norm(r)**5)
     
 class Magnetpair:
-    def __init__(self,place,m,distance=.04):
+    def __init__(self,place,m,distance=.12):
         self.distance = distance
         self.place = np.array(place)
         self.m = np.array(m)
@@ -44,18 +46,26 @@ class Magnetpair:
         return magnet1.B(r)+magnet2.B(r)
 
 class Magnetarray:
-    def __init__(self,num_of_pairs,m,distance=.013):
+    def __init__(self,num_of_pairs,m,distance=.02,pairdist=0.12):
         self.distance = distance
         self.num_of_pairs = int(num_of_pairs)
         self.m = m
+        self.pairdist = pairdist
     
     def B(self,r):
         B=np.zeros(3)
         for i in range(self.num_of_pairs):
             place=np.array([0,0,i*self.distance])
-            mag_pair=Magnetpair(place,self.m)
+            mag_pair=Magnetpair(place,self.m,distance=self.pairdist)
             B+=mag_pair.B(r)*(-1)**i
         return B
+    
+    def show_field(self, canvas):
+        mag_pair = Magnetpair(None,None)
+        x,y,z=[-mag_pair.distance/2,mag_pair.distance/2]*self.num_of_pairs , [0,0]*self.num_of_pairs , [(1)**k*i*self.distance for i in range(self.num_of_pairs) for k in range(2) ]
+
+        mx,my,mz = [(-1)**(i//2) for i in range(2*self.num_of_pairs)],[0,0]*self.num_of_pairs,[[0,0]*self.num_of_pairs]
+        canvas.quiver(x,y,z,mx,my,mz,normalize=True,length = .01)
 
 class Correctionstack:
     def __init__(self,num_of_magnets,m,root,distance):
@@ -74,24 +84,26 @@ class Correctionstack:
 
 
 #%%        
-mag=Magnetarray(0,[m1,0,0],distance=.08)
-cor_r = Correctionstack(20,[-m1,0,0],[0,.03,0],.013)
-cor_l = Correctionstack(20,[m1,0,0],(0,-.03,0),.013)
+mag=Magnetarray(10,[m1,0,0],distance=.06,pairdist=0.12)
+cor_r = Correctionstack(0,[-m1,0,0],[0,.03,0],.013)
+cor_l = Correctionstack(0,[m1,0,0],(0,-.03,0),.013)
 
 def B_total(r):
     return mag.B(r)+cor_r.B(r)+cor_l.B(r)
 
 
 
-B = np.zeros((ndens,ndens,ndens,3))
-for i,x in enumerate(nx):
-    for j,y in enumerate(ny):
-        for k,z in enumerate(nz):
-            B[i,j,k]=B_total((x,y,z))
-B=B.T
-Bx=B[0].T
-By=B[1].T
-Bz=B[2].T
+# =============================================================================
+# B = np.zeros((ndens,ndens,ndens,3))
+# for i,x in enumerate(nx):
+#     for j,y in enumerate(ny):
+#         for k,z in enumerate(nz):
+#             B[i,j,k]=B_total((x,y,z))
+# B=B.T
+# Bx=B[0].T
+# By=B[1].T
+# Bz=B[2].T
+# =============================================================================
 
 
 detector_position = (0,0,1)
@@ -118,7 +130,6 @@ class electron:
         return -const.e*(np.cross(self.vel,B))/self.rel_mass
     
     def step(self):
-        #self.Dt = 1E-13#min(1E-10,1E-7/np.linalg.norm(mag.B(self.place))*1E-7)
         vel = self.vel
         place = self.place
         self.vel = vel + self.Lorenz_acc()*self.Dt
@@ -131,10 +142,8 @@ class electron:
 def get_offset():
     return min(1,abs(np.random.normal(0,.3))),np.random.rand()*2*np.pi
 
-offset = get_offset()
-el = electron((0,.0,0),70,(.3,+np.pi/2)) #energy in keV pls  74.57   (offset[0],-np.pi/2)
-print(offset)
-
+# offset = get_offset()
+el = electron((0,.0,0),10,(0,-np.pi/2)) #energy in keV  74.57   (offset[0],-np.pi/2)
 
 trajectory = [(el.place,el.vel)]
 
@@ -169,38 +178,29 @@ timescale = np.arange(0,(len(memory))*el.Dt,el.Dt)
 
 fig=plt.figure(figsize=(15,15))
 ax = fig.add_subplot(projection='3d')
-x,y,z=np.meshgrid(nx,ny,nz)
+plt.xlim(-.05,.05)
+plt.ylim(-.05,.05)
 
-lengths=(np.sqrt(Bx**2+By**2+Bz**2))
-lengths_normalized = (lengths-(abs(lengths).min())) / abs(lengths.max())
-colors = (plt.cm.jet(lengths_normalized))
-colors = colors.reshape(-1, 4)
 
-ax.quiver(x,y,z,Bx,By,Bz,color=colors,length=0.05,normalize=True,linewidths=.5)
+# =============================================================================
+# x,y,z=np.meshgrid(nx,ny,nz)
+# lengths=(np.sqrt(Bx**2+By**2+Bz**2))
+# lengths_normalized = (lengths-(abs(lengths).min())) / abs(lengths.max())
+# colors = (plt.cm.jet(lengths_normalized))
+# colors = colors.reshape(-1, 4)
+# 
+# ax.quiver(x,y,z,Bx,By,Bz,color=colors,length=0.05,normalize=True,linewidths=.5)
+# =============================================================================
+mag.show_field(ax)
 ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],c="red")
 
 plt.xlabel("x")
 plt.ylabel("y")
 
-ax.view_init(5, 0)
+ax.view_init(5, 45)
 plt.show()
 plt.close()
-#%% continue for e-field
-for i in range(int(1E3)):
-    el.step()
-    memory.append(el.place)
-    vel_memory.append(el.vel)
-    acc_memory.append(el.Lorenz_acc())
-    trajectory.append((el.place,el.vel))
-    if i%(steps/10)==0:
-        print(int(i/steps*100),"%")
 
-retardierung = []
-for place in memory:
-    retardierung.append(np.linalg.norm(np.array(detector_position)-place)/const.c)
-retardierung = np.array(retardierung)
-
-timescale = np.arange(0,(len(memory))*el.Dt,el.Dt)
 #%% E-Field and potential (retardiertes Feld)
 R = []
 for place in memory:
@@ -248,14 +248,15 @@ for t,place,vel,acc,ret,r in zip(timescale,memory,vel_memory,acc_memory,retardie
 E_rad = np.array(E_rad).T
 B_rad = np.array(B_rad).T
 phis = np.array(phis).T
-fourier = np.abs(fft(E_rad[2][2287:]))
+fourier = np.abs(fft(E_rad[1][2287:]))
 freqs = fftfreq(len(fourier),timescale[-1]/len(timescale))
 #%%
 #plt.plot(timescale,np.linalg.norm(E_rad,axis=0))
 
-#plt.plot(timescale[2287:],E_rad[2][2287:])
-plt.plot(timescale[:],phis)
+plt.plot(timescale[2287:],E_rad[1][2287:])
+#plt.plot(timescale[2000:],E_rad[1][2000:])
 #plt.plot(freqs[:10],fourier[:10])
+print("f_max = ",freqs[np.where(fourier==np.max(fourier))[0][0]]*1E-6,"MHz")
 #%% Retry field. again.
 R = []
 for place in memory:
@@ -273,7 +274,7 @@ def E_rad(r,t,ret):
         
     acc = acc_memory[index]
     R_unit = R[index]/np.linalg.norm(R[index])
-    acc_perp = acc-np.dot(acc,R_unit)
+    acc_perp = acc#-np.dot(acc,R_unit)
     
     return const.e/(4*np.pi*const.epsilon_0*const.c**2)*1/np.linalg.norm(R[index])*acc_perp
 acc_memory = acc_memory
@@ -283,14 +284,14 @@ for t,ret in zip(timescale,retardierung):
     Ess.append(E_rad(detector_position,t,ret))
 Ess = np.array(Ess)
 
-fourier = np.abs(fft(Ess.T[0][2287:]))
+fourier = np.abs(fft(Ess.T[1][2287:]))
 freqs = fftfreq(len(fourier),timescale[-1]/len(timescale))
 
 #%%
-plt.plot(timescale[3000:],Ess.T[2][3000:])
+plt.plot(timescale[2000:],Ess.T[1][2000:])
 #plt.plot(freqs[:10],fourier[:10])
 plt.grid()
-
+print("f_max = ",freqs[np.where(fourier==np.max(fourier))[0][0]]*1E-6,"MHz")
 #%% MONTE CARLO
 def run_electron(electron,steps=3.5E3):
     memory = [electron.place]
@@ -353,17 +354,9 @@ for i in np.arange(50000,len(E_rad.T),100):
 for angle in np.linspace(0,90,100):
     fig=plt.figure(figsize=(15,15))
     ax = fig.add_subplot(projection='3d')
-    x,y,z=np.meshgrid(nx,ny,nz)
-    
-    lengths=(np.sqrt(Bx**2+By**2+Bz**2))
-    lengths_normalized = (lengths-(abs(lengths).min())) / abs(lengths.max())
-    colors = (plt.cm.jet(lengths))
-    colors = colors.reshape(-1, 4)
-    
-    ax.quiver(x,y,z,Bx,By,Bz,color=colors,length=0.05,normalize=True,linewidths=.5)
-    
-    ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],c="red")
 
+    ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],c="red")
+    mag.show_field(ax)
     ax.view_init(angle, angle/2)
     plt.show()
     plt.close()
@@ -399,28 +392,3 @@ frequencies = fft(pot[45000:70000])
 plt.plot(timescale[45000:],pot[45000:])
 #plt.plot(frequencies)
 #plt.plot(timescale[44000:],newpot[44000:])
-
-
-#%% test the magnet
-ma = Magnet((0,0,0),(0,0,m1))
-
-B_field = np.zeros((ndens,ndens,ndens,3))
-for i,x in enumerate(nx):
-    for j,y in enumerate(ny):
-        for k,z in enumerate(nz):
-            B_field[i,j,k]=ma.B((x,y,z))
-
-B_field=B_field.T
-Bx=B_field[0].T
-By=B_field[1].T
-Bz=B_field[2].T
-
-# z,x=np.meshgrid(nz,nx)
-
-# for i in range(ndens):
-#     plt.streamplot(z,x,Bz[:,i,:],Bx[:,i,:])
-#     plt.show()
-# z,x=np.meshgrid(nz,nx)
-# for i in range(ndens):
-#     plt.streamplot(z,x,Bz[:,i,:],Bx[:,i,:])
-#     plt.show()
