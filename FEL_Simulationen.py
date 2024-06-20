@@ -6,7 +6,7 @@ Created on Wed Apr  3 16:39:44 2024
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.fft import fft, ifft, fftfreq
+from scipy.fft import fft, fftfreq
 import scipy.constants as const
 #%%
 def get_dipole(B_rem,l,d):
@@ -15,23 +15,14 @@ def get_dipole(B_rem,l,d):
 m1 = get_dipole(1.3, 20E-3, 10E-3)
 
 #%%
-# =============================================================================
-# zl,zr=-.2,.5
-# yl,yr=-.2,.2
-# xl,xr=-.2,.2
-# ndens=10
-# 
-# nx,ny,nz = np.linspace(xl, xr,ndens),np.linspace(yl,yr,ndens),np.linspace(zl,zr,ndens)
-# 
-# =============================================================================
+
 class Magnet:
     def __init__(self,place,m):
         self.place = np.array(place)
         self.m = np.array(m)
     
-    def B(self,r):
-        r = np.array(r)
-        r = np.array(r-self.place)  
+    def B(self,r:np.ndarray):
+        r = np.array(r-self.place)
         return const.mu_0/(4*np.pi) * ((3*np.dot(self.m,r)*r-self.m*np.linalg.norm(r)**2))/(np.linalg.norm(r)**5)
     
 class Magnetpair:
@@ -60,12 +51,12 @@ class Magnetarray:
             B+=mag_pair.B(r)*(-1)**i
         return B
     
-    def show_field(self, canvas):
-        mag_pair = Magnetpair(None,None)
-        x,y,z=[-mag_pair.distance/2,mag_pair.distance/2]*self.num_of_pairs , [0,0]*self.num_of_pairs , [(1)**k*i*self.distance for i in range(self.num_of_pairs) for k in range(2) ]
+    def show_dipole(self, canvas):
+        x,y,z=[-self.pairdist/2,self.pairdist/2]*self.num_of_pairs , [0,0]*self.num_of_pairs , [(1)**k*i*self.distance for i in range(self.num_of_pairs) for k in range(2) ]
 
         mx,my,mz = [(-1)**(i//2) for i in range(2*self.num_of_pairs)],[0,0]*self.num_of_pairs,[[0,0]*self.num_of_pairs]
-        canvas.quiver(x,y,z,mx,my,mz,normalize=True,length = .01)
+        canvas.quiver(x,y,z,mx,my,mz,normalize=True,length = .01,linewidth=10,color=(34/255,139/255,34/255))
+        canvas.quiver(x,y,z,-np.array(mx),my,mz,normalize=True,length = .01,linewidth=10,color=(204/255,0,0))
 
 class Correctionstack:
     def __init__(self,num_of_magnets,m,root,distance):
@@ -92,74 +83,70 @@ def B_total(r):
     return mag.B(r)+cor_r.B(r)+cor_l.B(r)
 
 
-
-# =============================================================================
-# B = np.zeros((ndens,ndens,ndens,3))
-# for i,x in enumerate(nx):
-#     for j,y in enumerate(ny):
-#         for k,z in enumerate(nz):
-#             B[i,j,k]=B_total((x,y,z))
-# B=B.T
-# Bx=B[0].T
-# By=B[1].T
-# Bz=B[2].T
-# =============================================================================
-
-
 detector_position = (0,0,1)
 
 class electron:
     def __init__(self,place,energy,offset=(0,0)): #energy in keV
         self.place=np.array(place)
-        
-        #same thing...
-        #E = energy*1E3*const.e
-        #self.vel_abs1 = np.sqrt((E*(2*const.m_e*const.c**4+E*const.c**2))/(const.m_e**2*const.c**4 + 2*E*const.m_e*const.c**2+E**2))
-        
+                
         self.vel_abs = np.sqrt(1-((const.m_e*const.c**2/const.e)/(energy*10**3+const.m_e*const.c**2/const.e))**2)*const.c
         self.vel = np.array([self.vel_abs*offset[0]*np.cos(offset[1]),self.vel_abs*offset[0]*np.sin(offset[1]),np.sqrt(1-offset[0]**2)*self.vel_abs])
         
         self.rel_mass = const.m_e/(np.sqrt(1-(self.vel_abs/const.c)**2))
         
-        self.Dt = 1E-12
+        self.Dt = 1E-11
         
         self.timesteps = 0
-        
-    def Lorenz_acc(self):
-        B = B_total(self.place)
+    
+    def Lorenz_acc(self,place):
+        B = B_total(place)
         return -const.e*(np.cross(self.vel,B))/self.rel_mass
     
-    def step(self):
+    def eulerstep(self):
         vel = self.vel
         place = self.place
-        self.vel = vel + self.Lorenz_acc()*self.Dt
+        self.vel = vel + self.Lorenz_acc(self.place)*self.Dt
         self.vel = self.vel/np.linalg.norm(self.vel)*self.vel_abs
         self.place = place + vel*self.Dt
         
         self.timesteps+=1
-
+    
+    def rungestep(self):
+        h = self.Dt
+        vel = self.vel
+        k1 = self.Lorenz_acc(self.place)
+        k2 = self.Lorenz_acc(self.place+h*k1/2)
+        k3 = self.Lorenz_acc(self.place+h*k2/2)
+        k4 = self.Lorenz_acc(self.place+h*k3)
+        
+        self.vel = vel + h/6*(k1+k2*2+k3*2+k4)
+        self.vel = self.vel/np.linalg.norm(self.vel)*self.vel_abs
+        
+        self.place = self.place+vel*self.Dt
+        
+        self.timesteps+=1
 
 def get_offset():
     return min(1,abs(np.random.normal(0,.3))),np.random.rand()*2*np.pi
 
-# offset = get_offset()
-el = electron((0,.0,0),10,(0,-np.pi/2)) #energy in keV  74.57   (offset[0],-np.pi/2)
+offset = get_offset()
+el = electron((0,.003,0),10,(0,0)) #energy in keV
 
 trajectory = [(el.place,el.vel)]
 
 memory = [el.place]
 vel_memory = [el.vel]
-acc_memory = [el.Lorenz_acc()]
+acc_memory = [el.Lorenz_acc(el.place)]
 
 
 #%% get Trajectory
 steps=1E3
 i=0
 while el.place[0]**2+el.place[1]**2 <= 1**2 and i <= steps:
-    el.step()
+    el.rungestep()
     memory.append(el.place)
     vel_memory.append(el.vel)
-    acc_memory.append(el.Lorenz_acc())
+    acc_memory.append(el.Lorenz_acc(el.place))
     trajectory.append((el.place,el.vel))
     if i%(steps/10)==0:
         print(int(i/steps*100),"%")
@@ -176,30 +163,128 @@ retardierung = np.array(retardierung)
 timescale = np.arange(0,(len(memory))*el.Dt,el.Dt)
 
 
-fig=plt.figure(figsize=(15,15))
+fig=plt.figure(figsize=(10,10))
 ax = fig.add_subplot(projection='3d')
 plt.xlim(-.05,.05)
 plt.ylim(-.05,.05)
 
+mag.show_dipole(ax)
+ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],color=(204/255,0,0),label="Trajektorie")
 
-# =============================================================================
-# x,y,z=np.meshgrid(nx,ny,nz)
-# lengths=(np.sqrt(Bx**2+By**2+Bz**2))
-# lengths_normalized = (lengths-(abs(lengths).min())) / abs(lengths.max())
-# colors = (plt.cm.jet(lengths_normalized))
-# colors = colors.reshape(-1, 4)
-# 
-# ax.quiver(x,y,z,Bx,By,Bz,color=colors,length=0.05,normalize=True,linewidths=.5)
-# =============================================================================
-mag.show_field(ax)
-ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],c="red")
-
-plt.xlabel("x")
-plt.ylabel("y")
-
-ax.view_init(5, 45)
+ax.set_xlabel("x (m)",fontsize=20)
+ax.set_ylabel("y (m)",fontsize=20)
+ax.set_zlabel("z (m)",fontsize=20)
+ax.legend(fontsize=20)
+ax.view_init(20, 40)
+plt.tight_layout()
 plt.show()
+#plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/first_trajectory.png",dpi=200)
 plt.close()
+
+#%% Retry field. again.
+R = np.array([(np.array(detector_position)-place) for place in memory])
+
+
+def E_rad(r,t,ret):
+    index = int(np.round((t - np.linalg.norm(ret)/const.c)/el.Dt))
+    if index < 0:
+        return np.zeros(3),index
+        
+    acc = acc_memory[index]
+    acc_perp = np.array([0,acc[1],0]) #acc-np.dot(acc,R_unit)
+    
+    return const.e/(4*np.pi*const.epsilon_0*const.c**2)*1/np.linalg.norm(R[index])*acc_perp,index
+acc_memory = acc_memory
+
+Ess = []
+i=0
+for t in (timescale):
+    E,index = E_rad(detector_position,t,R[i])
+    Ess.append(E)
+    if index>=0:
+        i+=1   
+    
+Ess = np.array(Ess)
+
+fourier = np.abs(fft(Ess.T[1][:]))
+freqs = fftfreq(len(fourier),timescale[-1]/len(timescale))
+
+#%%
+plt.plot(timescale[:]*1e9,Ess.T[1][:]*1e9,c=(204/255,0,0))
+plt.xlabel("$t$ (ns)",fontsize=14)
+plt.ylabel(r"$E_y$ (nV m$^{-1}$)",fontsize=14)
+plt.title("Abgestrahltes Feld der Trajektorie bei $r=(0,0,1)$",fontsize=14)
+plt.tight_layout()
+plt.grid()
+plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/rad_field.png",dpi=200)
+
+#%%
+plt.plot(freqs[:50]*1e-9,fourier[:50]*1e9,c=(204/255,0,0))
+plt.xlabel(r"$f$ (GHz)",fontsize=14)
+plt.ylabel(r"$FFT(E_y)$ (nV m$^{-1}$)",fontsize=14)
+plt.title("FFT des Abgestrahlten Feldes bei $r=(0,0,1)$",fontsize=14)
+plt.grid()
+plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/fourier.png",dpi=200)
+
+print("f_max = ",freqs[np.where(fourier==np.max(fourier))[0][0]]*1E-6,"MHz")
+
+#%% MONTE CARLO
+def run_electron(electron,steps=1E3):
+    memory = [electron.place]
+    vel_memory = [electron.vel]
+    acc_memory = [electron.Lorenz_acc(electron.place)]
+
+    i=0
+    while electron.place[0]**2+electron.place[1]**2 <= .04**2 and i <= steps:
+        electron.rungestep()
+        memory.append(electron.place)
+        vel_memory.append(electron.vel)
+        acc_memory.append(electron.Lorenz_acc(electron.place))
+        i+=1
+    return memory,vel_memory,acc_memory
+
+clipboard = []
+
+for run in range(1000):
+    parameters = get_offset()
+    contestant = electron((0,0,0),10,parameters)
+    clipboard.append((run_electron(contestant),parameters))
+    print(run*1/10,"%")
+#%% check parameterraum
+sucessful = []
+unsucessful = []
+for run in clipboard: # sort
+    if run[0][0][-1][0]**2+run[0][0][-1][1]**2 <= .04**2:
+        sucessful.append(np.array(run[1]))
+    else:
+        unsucessful.append(np.array(run[1]))
+
+sucessful = np.array(sucessful).T
+unsucessful = np.array(unsucessful).T
+
+plt.xlabel("θ (°)")
+plt.ylabel("φ (°)")
+plt.xlim(0,40)
+plt.ylim(0,360)
+plt.scatter(np.arcsin(sucessful[0])*360/(2*np.pi),sucessful[1]*360/(2*np.pi),color=(34/255,139/255,34/255),s=3,label="Erfolgreiche Läufe")
+plt.scatter(np.arcsin(unsucessful[0])*360/(2*np.pi),unsucessful[1]*360/(2*np.pi),color=(204/255,0,0),s=3,label="Erfolglose Läufe")
+plt.grid()
+plt.legend()
+plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/parameterraum.png",dpi=200)
+plt.show()
+
+
+#%% Plotting 3D
+for angle in np.linspace(0,90,100):
+    fig=plt.figure(figsize=(15,15))
+    ax = fig.add_subplot(projection='3d')
+
+    ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],c="red")
+    mag.show_dipole(ax)
+    ax.view_init(angle, angle/2)
+    plt.show()
+    plt.close()
+
 
 #%% E-Field and potential (retardiertes Feld)
 R = []
@@ -257,110 +342,6 @@ plt.plot(timescale[2287:],E_rad[1][2287:])
 #plt.plot(timescale[2000:],E_rad[1][2000:])
 #plt.plot(freqs[:10],fourier[:10])
 print("f_max = ",freqs[np.where(fourier==np.max(fourier))[0][0]]*1E-6,"MHz")
-#%% Retry field. again.
-R = []
-for place in memory:
-    R.append(np.array(detector_position)-place)
-R = np.array(R)
-
-acc_memory = np.array(acc_memory)
-
-
-
-def E_rad(r,t,ret):
-    index = int(np.round((t - ret)/el.Dt))
-    if index < 0:
-        return np.zeros(3)
-        
-    acc = acc_memory[index]
-    R_unit = R[index]/np.linalg.norm(R[index])
-    acc_perp = acc#-np.dot(acc,R_unit)
-    
-    return const.e/(4*np.pi*const.epsilon_0*const.c**2)*1/np.linalg.norm(R[index])*acc_perp
-acc_memory = acc_memory
-
-Ess = []
-for t,ret in zip(timescale,retardierung):
-    Ess.append(E_rad(detector_position,t,ret))
-Ess = np.array(Ess)
-
-fourier = np.abs(fft(Ess.T[1][2287:]))
-freqs = fftfreq(len(fourier),timescale[-1]/len(timescale))
-
-#%%
-plt.plot(timescale[2000:],Ess.T[1][2000:])
-#plt.plot(freqs[:10],fourier[:10])
-plt.grid()
-print("f_max = ",freqs[np.where(fourier==np.max(fourier))[0][0]]*1E-6,"MHz")
-#%% MONTE CARLO
-def run_electron(electron,steps=3.5E3):
-    memory = [electron.place]
-    vel_memory = [electron.vel]
-    acc_memory = [electron.Lorenz_acc()]
-
-    i=0
-    while electron.place[0]**2+electron.place[1]**2 <= .1**2 and i <= steps:
-        electron.step()
-        memory.append(electron.place)
-        vel_memory.append(electron.vel)
-        acc_memory.append(electron.Lorenz_acc())
-        i+=1
-    return memory,vel_memory,acc_memory
-
-clipboard = []
-
-for run in range(100):
-    parameters = get_offset()
-    contestant = electron((0,0,0),200,parameters)
-    clipboard.append((run_electron(contestant),parameters))
-    print(run,"%")
-#%% check parameterraum
-sucessful = []
-unsucessful = []
-for run in clipboard: # sort
-    if run[0][0][-1][0]**2+run[0][0][-1][1]**2 <= .07**2:
-        sucessful.append(np.array(run[1]))
-    else:
-        unsucessful.append(np.array(run[1]))
-
-sucessful = np.array(sucessful).T
-unsucessful = np.array(unsucessful).T
-
-
-plt.xlabel("radius")
-plt.ylabel("angle")
-plt.xlim(0,1)
-plt.ylim(0,2*np.pi)
-plt.scatter(sucessful[0],sucessful[1],c="green",s=3)
-plt.scatter(unsucessful[0],unsucessful[1],c="red",s=3)
-plt.show()
-
-
-
-#%% 
-for i in np.arange(50000,len(E_rad.T),100):
-    e=E_rad.T[i]*3E17
-    b=B_rad.T[i]*3E17
-    fig=plt.figure(figsize=(15,15))
-    ax = fig.add_subplot(projection='3d')
-    
-    ax.quiver(0, 0, 0, e[0],e[1],e[2], length=np.linalg.norm(e))
-    ax.quiver(0, 0, 0, b[0],b[1],b[2], length=np.linalg.norm(b),color="red")
-    ax.view_init((i-50000)/1000, i/2000)
-    plt.show()
-#ax.quiver(0, 0, 0, E_rad.T[50000,0], E_rad.T[50000,1], E_rad.T[50000,2], length=np.linalg.norm(E_rad.T[50000]))
-
-#%% Plotting 3D
-for angle in np.linspace(0,90,100):
-    fig=plt.figure(figsize=(15,15))
-    ax = fig.add_subplot(projection='3d')
-
-    ax.scatter(np.array(memory).T[0],np.array(memory).T[1],np.array(memory).T[2],c="red")
-    mag.show_field(ax)
-    ax.view_init(angle, angle/2)
-    plt.show()
-    plt.close()
-    
 
 #%% Anderes berechnen vom Feld (wahrscheinlich falsch)
 def rq(t,trajectory):
@@ -392,3 +373,8 @@ frequencies = fft(pot[45000:70000])
 plt.plot(timescale[45000:],pot[45000:])
 #plt.plot(frequencies)
 #plt.plot(timescale[44000:],newpot[44000:])
+#%%
+ZZ = np.array([np.zeros(1000),np.zeros(1000)-.12,np.linspace(0,.5,1000)]).T
+BZZ = np.array([B_total(ZZZ) for ZZZ in ZZ])
+plt.plot(ZZ.T[2],BZZ.T[0])
+
