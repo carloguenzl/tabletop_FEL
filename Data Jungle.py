@@ -7,7 +7,7 @@ Created on Fri May  3 19:24:33 2024
 import numpy as np
 import matplotlib.pyplot as plt
 
-path ="C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/Spektren/Test2.mdr"
+path ="C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL_GIT/Spektren/Test2.mdr"
 
 def get_mdrdata(path):
     #Get the stuff
@@ -36,6 +36,11 @@ Stray = np.std(Values,axis=0)
 for i in Values:
     plt.plot(Frequencies,i)
     plt.show()
-
-plt.plot(Frequencies,MeanValue)
-plt.plot(Frequencies,Stray)
+#%%
+plt.figure(dpi=150)
+plt.plot(Frequencies*1E-9,MeanValue,linewidth=.5,c=(204/255,0,0))
+plt.grid()
+plt.xlabel("Frequenz (GHz)")
+plt.ylabel("Pegel (dB)")
+plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/spectran_rauschen.png",dpi=200)
+#plt.plot(Frequencies,Stray)
