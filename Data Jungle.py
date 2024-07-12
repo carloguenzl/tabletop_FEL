@@ -7,18 +7,19 @@ Created on Fri May  3 19:24:33 2024
 import numpy as np
 import matplotlib.pyplot as plt
 
-path ="C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL_GIT/Spektren/Test2.mdr"
-
+path ="C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL_GIT/Spektren/MESSUNG/MESSUNG 1 MIT.mdr"
+empty = "C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL_GIT/Spektren/MESSUNG/Messung ohne Magnete.mdr"
 def get_mdrdata(path):
     #Get the stuff
     Files = open(path)
     content = Files.readlines()
     
-    count = content[48][28:32]
-    Frequencies = np.array(content[48][34:-1].split("; ")[:-1],dtype=float)
+    count = content[47][28:32]
+
+    Frequencies = np.array(content[47][34:-1].split("; ")[:-1],dtype=float)
     
-    marker = '        <Values count="'+count+'" unit="0">'
-    Values = content[49].replace(marker,'')
+    marker = f'        <Values count="{count}" unit="0">'
+    Values = content[48].replace(marker,'')
     
     Values = [np.array(Values.split("; ")[:-1],dtype=float)]
     
@@ -30,17 +31,21 @@ def get_mdrdata(path):
 
 Frequencies,Values = get_mdrdata(path)
 
+_,groundvalues = get_mdrdata(empty)
+compare = np.mean(groundvalues,axis=0)
+
 MeanValue = np.mean(Values,axis=0)
 Stray = np.std(Values,axis=0)
 
-for i in Values:
-    plt.plot(Frequencies,i)
-    plt.show()
+
+# for i in Values:
+#     plt.plot(Frequencies,i)
+#     plt.show()
 #%%
 plt.figure(dpi=150)
-plt.plot(Frequencies*1E-9,MeanValue,linewidth=.5,c=(204/255,0,0))
+plt.plot(Frequencies*1E-6,Stray,linewidth=.5,c=(204/255,0,0))
 plt.grid()
-plt.xlabel("Frequenz (GHz)")
+plt.xlabel("Frequenz (MHz)")
 plt.ylabel("Pegel (dB)")
-plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/spectran_rauschen.png",dpi=200)
+#plt.savefig("C:/Users/carlo/Desktop/Dateidatei/6. SEMESTER/F-Praktikum/FEL/pics/spectran_rauschen.png",dpi=200)
 #plt.plot(Frequencies,Stray)
