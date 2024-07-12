@@ -6,6 +6,5 @@ The trajectories and frequencies can be used for tabletop Free-Electron-Lasers.
 FEL_Simulationen.py is the main code. Don't run it completely, doesnt work entirely and some cells take for ever. The given paths are my personal ones, probably throws errors there.
 
 ### TODOS
-- find exact m according to measurements in tangential direction (magnet.opju)
-- Show magnets in correctionstacks
+- find exact m according to measurements in tangential direction (magnet.opju
 - look into 289-cell. something seems very wrong there.
